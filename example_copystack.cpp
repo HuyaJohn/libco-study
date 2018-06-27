@@ -43,14 +43,15 @@ void* RoutineFunc(void* args)
 
 int main()
 {
-	stShareStack_t* share_stack= co_alloc_sharestack(1, 1024 * 128);
+	stShareStack_t* share_stack= co_alloc_sharestack(20, 1024 * 128);
 	stCoRoutineAttr_t attr;
 	attr.stack_size = 0;
 	attr.share_stack = share_stack;
 
-	stCoRoutine_t* co[2];
-	int routineid[2];
-	for (int i = 0; i < 2; i++)
+    // n个协程共享m个栈效率更高,可以取一个平衡,n>=m
+	stCoRoutine_t* co[20];
+	int routineid[20];
+	for (int i = 0; i < 20; i++)
 	{
 		routineid[i] = i;
 		co_create(&co[i], &attr, RoutineFunc, routineid + i);

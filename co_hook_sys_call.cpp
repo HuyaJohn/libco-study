@@ -227,9 +227,11 @@ int socket(int domain, int type, int protocol)
 		return fd;
 	}
 
+    // 分配描述符相关的描述信息
 	rpchook_t *lp = alloc_by_fd( fd );
 	lp->domain = domain;
 	
+    // 初始化描述符属性
 	fcntl( fd, F_SETFL, g_sys_fcntl_func(fd, F_GETFL,0 ) );
 
 	return fd;
@@ -269,6 +271,7 @@ int connect(int fd, const struct sockaddr *address, socklen_t address_len)
 		return ret;
 	}
 	
+    // @What 只有nonblock fd才会EINPROGRESS吧
 	if (!(ret < 0 && errno == EINPROGRESS))
 	{
 		return ret;
@@ -291,8 +294,10 @@ int connect(int fd, const struct sockaddr *address, socklen_t address_len)
 			break;
 		}
 	}
+    // @What 这时候连接不一定成功的吧,要手动geterror
 	if( pf.revents & POLLOUT ) //connect succ
 	{
+        // @Bug
 		errno = 0;
 		return 0;
 	}
@@ -335,8 +340,13 @@ ssize_t read( int fd, void *buf, size_t nbyte )
 	{
 		return g_sys_read_func( fd,buf,nbyte );
 	}
+
+    // 探测fd是否由libco产生, 如果没有hook socket函数,那么就不能走hook的read逻辑
+    // @What 不过上面的co_is_enable_sys_hook不也是可以做类似的事情吗
 	rpchook_t *lp = get_by_fd( fd );
 
+    // @What 非阻塞调用直接返回系统的read方法
+    // 非阻塞是程序员的写法,不应该强行加入到协程中,一个是为了兼容代码,一个是为了减少侵入性
 	if( !lp || ( O_NONBLOCK & lp->user_flag ) ) 
 	{
 		ssize_t ret = g_sys_read_func( fd,buf,nbyte );
@@ -349,6 +359,7 @@ ssize_t read( int fd, void *buf, size_t nbyte )
 	pf.fd = fd;
 	pf.events = ( POLLIN | POLLERR | POLLHUP );
 
+    // 这里poll将fd添加后就swap了,等待IO到来或者超时
 	int pollret = poll( &pf,1,timeout );
 
 	ssize_t readret = g_sys_read_func( fd,(char*)buf ,nbyte );
@@ -392,6 +403,7 @@ ssize_t write( int fd, const void *buf, size_t nbyte )
 	{
 		wrotelen += writeret;	
 	}
+    // 只尝试一直写入知道nbytes,不一定完全写到nbytes,耗时可能也会增加,调用者需要send_buffer
 	while( wrotelen < nbyte )
 	{
 
@@ -584,8 +596,8 @@ int poll(struct pollfd fds[], nfds_t nfds, int timeout)
 	}
 
 	return co_poll_inner( co_get_epoll_ct(),fds,nfds,timeout, g_sys_poll_func);
-
 }
+
 int setsockopt(int fd, int level, int option_name,
 			                 const void *option_value, socklen_t option_len)
 {
@@ -744,11 +756,15 @@ void co_set_env_list( const char *name[],size_t cnt)
 	{
 		if( name[i] && name[i][0] )
 		{
+            // 这里cnt++了
+            printf("%s\n", name[i]);
 			g_co_sysenv.data[ g_co_sysenv.cnt++ ].name = strdup( name[i] );
 		}
 	}
+
 	if( g_co_sysenv.cnt > 1 )
 	{
+        // env按照key排序
 		qsort( g_co_sysenv.data,g_co_sysenv.cnt,sizeof(stCoSysEnv_t),co_sysenv_comp );
 		stCoSysEnv_t *lp = g_co_sysenv.data;
 		stCoSysEnv_t *lq = g_co_sysenv.data + 1;
@@ -779,14 +795,17 @@ int setenv(const char *n, const char *value, int overwrite)
 		{
 			if( !self->pvEnv )
 			{
+                // 复制一份全局的env到当前协程中
 				self->pvEnv = dup_co_sysenv_arr( &g_co_sysenv );
 			}
 			stCoSysEnvArr_t *arr = (stCoSysEnvArr_t*)(self->pvEnv);
 
 			stCoSysEnv_t name = { (char*)n,0 };
 
+            // 有序数组二分查找
 			stCoSysEnv_t *e = (stCoSysEnv_t*)bsearch( &name,arr->data,arr->cnt,sizeof(name),co_sysenv_comp );
 
+            // 找到了才设置
 			if( e )
 			{
 				if( overwrite || !e->value  )
@@ -796,9 +815,15 @@ int setenv(const char *n, const char *value, int overwrite)
 				}
 				return 0;
 			}
+            else
+            {
+                printf("can't find %s\n", name);
+            }
 		}
 
 	}
+
+    // 还是会调用全局的,如果没有hook,那就全局唯一,而不是每个协程唯一
 	return g_sys_setenv_func( n,value,overwrite );
 }
 int unsetenv(const char *n)
@@ -844,6 +869,7 @@ char *getenv( const char *n )
 
 		if( !self->pvEnv )
 		{
+            // 复制一份全局的env到当前协程中
 			self->pvEnv = dup_co_sysenv_arr( &g_co_sysenv );
 		}
 		stCoSysEnvArr_t *arr = (stCoSysEnvArr_t*)(self->pvEnv);

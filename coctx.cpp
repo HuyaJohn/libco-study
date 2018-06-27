@@ -41,6 +41,7 @@
 #define R8 12
 #define R9 13
 
+// @What 寄存器有空可以了解下
 
 //----- --------
 // 32 bit
@@ -98,7 +99,6 @@ int coctx_make( coctx_t *ctx,coctx_pfn_t pfn,const void *s,const void *s1 )
 	//make room for coctx_param
 	char *sp = ctx->ss_sp + ctx->ss_size - sizeof(coctx_param_t);
 	sp = (char*)((unsigned long)sp & -16L);
-
 	
 	coctx_param_t* param = (coctx_param_t*)sp ;
 	param->s1 = s;

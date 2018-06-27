@@ -83,6 +83,7 @@ int main(int argc, char* argv[])
 		co_create(&co, NULL, RoutineFunc, &args[i]);
 		co_resume(co);
 	}
+    SetAndGetEnv(getpid());
 	co_eventloop(co_get_epoll_ct(), NULL, NULL);
 	return 0;
 }
