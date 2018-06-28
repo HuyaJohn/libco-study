@@ -43,6 +43,16 @@ void* RoutineFunc(void* args)
 
 int main()
 {
+#if defined(__ia64__)
+        printf("__ia64__\n");
+#elif defined(__i386__)
+        printf("__i386__\n");
+#elif defined(__amd64__) || defined(__x86_64__)
+        printf("__amd64__/__x86_64__\n");
+#elif defined(__arm__)
+        printf("__arm__\n");
+#endif
+
 	stShareStack_t* share_stack= co_alloc_sharestack(20, 1024 * 128);
 	stCoRoutineAttr_t attr;
 	attr.stack_size = 0;

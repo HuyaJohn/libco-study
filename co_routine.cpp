@@ -819,7 +819,7 @@ void OnPollPreparePfn( stTimeoutItem_t * ap,struct epoll_event &e,stTimeoutItemL
 }
 
 
-// 执行IO/定时事件
+// 执行IO/定时事件,这个是一定需要的,相当于ST里面的idle_thread,也就是调用者,用户创建的协程会跟这个函数进行来回切回,协程会运行完毕,这个函数不会
 void co_eventloop( stCoEpoll_t *ctx,pfn_co_eventloop_t pfn,void *arg )
 {
 	if( !ctx->result )

@@ -16,6 +16,32 @@
 * limitations under the License.
 */
 
+// AT&T  : mov src dst
+// INTEL : MOV DST SRC
+
+/*
+ https://blog.csdn.net/hit_shaoqi/article/details/50938602 参考文章
+-------------  ebp 
+   s1_var_a
+   s1_var_b
+   s1_var_c
+-------------  esp
+
+调用某个函数后,栈就变成这样了
+
+pushl %ebp 
+movl %esp,%ebp 
+
+-------------
+   s1_var_a
+   s1_var_b
+   s1_var_c
+   push ebp
+-------------  ebp
+   s2_var_a
+-------------
+
+*/
 .globl coctx_swap
 #if !defined( __APPLE__ ) && !defined( __FreeBSD__ )
 .type  coctx_swap, @function
@@ -54,14 +80,20 @@ coctx_swap:
 	ret
 
 #elif defined(__x86_64__)
-	leaq 8(%rsp),%rax
-	leaq 112(%rdi),%rsp
-	pushq %rax
+    // EIP保存了当前指令的地址,CPU执行一条指令EIP++
+    // rdi rsi rdx rcx r8 r9 存放1-6个参数, 超过7个从右往左入栈
+    // https://blog.csdn.net/kingzone_2008/article/details/44544285  (AT&T汇编指令enter、leave、call、ret)
+    // 还有点似懂非懂
+    // 外层调用的时候call co_swap, eip放在了rsp+8的位置
+	leaq 8(%rsp),%rax // 把rsp+8的地址赋值到rax寄存器中
+	leaq 112(%rdi),%rsp // 把rdi+112的地址赋值到rsp寄存器中, 这里把栈指针修改到了第一个参数的112/8=14偏移量位置
+    // 保存当前寄存器的值
+	pushq %rax // 把rax寄存器内容压栈 [pushq 相当于rsp=rsp-8 rsp=xxx]
 	pushq %rbx
 	pushq %rcx
 	pushq %rdx
 
-	pushq -8(%rax) //ret func addr
+	pushq -8(%rax) //ret func addr,不能只保存函数入口,而是要保存EIP的值,函数入口是第一次makecontext的时候才保存的,比如半路有IO了, co_resume进来后, 再yield出去后,要返回到调用之前的地方
 
 	pushq %rsi
 	pushq %rdi
@@ -73,7 +105,8 @@ coctx_swap:
 	pushq %r14
 	pushq %r15
 	
-	movq %rsi, %rsp
+	movq %rsi, %rsp // 这一行把栈指针改写到了rsi(第二参数)的地址了,然后下面的popq恢复寄存器
+    // 恢复寄存器
 	popq %r15
 	popq %r14
 	popq %r13
@@ -83,13 +116,13 @@ coctx_swap:
 	popq %rbp
 	popq %rdi
 	popq %rsi
-	popq %rax //ret func addr
+	popq %rax //ret func addr, 初始化的时候就把函数入口set进来了
 	popq %rdx
 	popq %rcx
 	popq %rbx
 	popq %rsp
 	pushq %rax
 	
-	xorl %eax, %eax
+	xorl %eax, %eax // eax寄存器清零, eax保存返回值
 	ret
 #endif

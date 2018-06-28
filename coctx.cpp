@@ -106,6 +106,10 @@ int coctx_make( coctx_t *ctx,coctx_pfn_t pfn,const void *s,const void *s1 )
 
 	memset(ctx->regs, 0, sizeof(ctx->regs));
 
+    // 第一次跟thread swap的时候, 只需要保存ESP跟EIP两个寄存器就可以了,其他都是调用的时候用到的寄存器
+    // 也就是coctx_swap.S里面的代码,第一次恢复栈的时候,只关注ESP EIP
+    // co_creaet(xxx)
+    // co_resume(xxx)
 	ctx->regs[ kESP ] = (char*)(sp) - sizeof(void*);
 	ctx->regs[ kEIP ] = (char*)pfn;
 
@@ -119,10 +123,15 @@ int coctx_make( coctx_t *ctx,coctx_pfn_t pfn,const void *s,const void *s1 )
 
 	memset(ctx->regs, 0, sizeof(ctx->regs));
 
+    // 第一次跟thread swap的时候, 需要保存ESP/EIP/RDI/RSI,其他都是调用的时候用到的寄存器
+    // 也就是coctx_swap.S里面的代码,第一次恢复栈的时候,关注ESP/EIP/RDI/RSI
+    // co_creaet(xxx)
+    // co_resume(xxx)
 	ctx->regs[ kRSP ] = sp - 8;
 
 	ctx->regs[ kRETAddr] = (char*)pfn;
 
+    // 第一个参数RDI,第二个参数RSI
 	ctx->regs[ kRDI ] = (char*)s;
 	ctx->regs[ kRSI ] = (char*)s1;
 	return 0;
